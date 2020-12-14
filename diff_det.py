@@ -129,7 +129,10 @@ def diff_img_stack(fname="full_59.mp4",
                 yr_str=p.group(2)
                 hr_str=p.group(3)
                 fn_str=p.group(4)
-                ofname="%s/%s-%s-%s-%s-%04d.jpg"%(odir,cam_str,yr_str,hr_str,fn_str,frame_num)
+                #%04d.jpg
+                odirname="%s/%s/%s/%s"%(odir,cam_str,yr_str,hr_str)
+                os.system("mkdir -p %s"%(odirname))
+                ofname="%s/%s-%04d.jpg"%(odirname,fn_str,frame_num)
                 print("saving %s"%(ofname))
                 cv2.imwrite(ofname, frame_r)
 
