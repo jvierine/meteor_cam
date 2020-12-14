@@ -75,6 +75,21 @@ def diff_img_stack(fname="full_59.mp4",
                        plot=False,
                        median_len=30)
 
+
+    camdir=re.search("(.*/cam.)/......../../full_...mp4",fname).group(1)
+    mask_img="%s/mask.jpg"%(camdir)
+    if os.path.exists(mask_img):
+        mask_img=cv2.imread(mask_img)
+        
+        mask_img[mask_img> 0]=1.0
+    else:
+        print("no mask image found")
+        exit(0)
+#    plt.imshow(n.array(mask_img,dtype=n.float32),vmin=0,vmax=1.0)
+ #   plt.show()
+    print("camdir")
+    print(camdir)
+    
     det_frames = []
     det_pos = []
     det_snr = []    
@@ -83,10 +98,12 @@ def diff_img_stack(fname="full_59.mp4",
     
     cap = cv2.VideoCapture(fname)
     ret,frame0 = cap.read()
+    frame0=frame0*mask_img
     frame0[cam_0:cam_1,:,:]=0
     history=n.zeros(history_len)
 
     gray = cv2.cvtColor(frame0,cv2.COLOR_BGR2GRAY)
+    
     prev=n.array(block_reduce(gray,block_size=(dec,dec),func=n.max),dtype=n.float32)
     frame_num=1
 
@@ -99,7 +116,9 @@ def diff_img_stack(fname="full_59.mp4",
     while(1):
         ret,frame0 = cap.read()
         if ret:
+            
             frame_orig=n.copy(frame0)
+            frame0=frame0*mask_img
             frame0[cam_0:cam_1,:,:]=0
             gray = cv2.cvtColor(frame0,cv2.COLOR_BGR2GRAY)
             gray2=n.array(block_reduce(gray,block_size=(dec,dec),func=n.max),dtype=n.float32)
