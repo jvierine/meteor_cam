@@ -21,7 +21,7 @@ def animate_mp4s(mp4fname,max_im,out):
         diffs=n.diff(idxs)
         pairs=[]
         for di,d in enumerate(diffs):
-            if d == 1:
+            if d == 1 or d==2:
                 pairs.append(di)
                 pairs.append(di+1)
         gidx=n.unique(pairs)
@@ -31,32 +31,44 @@ def animate_mp4s(mp4fname,max_im,out):
                 d_im0=cv2.resize(im,(1024,768))
                 max_im[738:768,:,:]=0        
                 max_im=n.maximum(max_im,d_im0)
-                out.write(max_im)
-                cv2.imshow("window",max_im)
-                cv2.waitKey(100)
+                bi=cv2.bilateralFilter(max_im,9,75,75)                
+                out.write(bi)
+                cv2.imshow("window",bi)
+#                cv2.waitKey(10)
+                if cv2.waitKey(10) == ord('q'):
+                    exit(0)
             if len(gidx)>0:
-                cv2.waitKey(1000)
+                cv2.waitKey(10)
     return(max_im)
 
+def mp4names(d):
+    fl = glob.glob("%s/full*.mp4*.jpg"%(d))
 
+    nms=[]
+    for f in fl:
+        nms.append(re.search("(.*)-.....jpg",f).group(1))
+    return(n.unique(nms))
+    
 
-cv2.namedWindow("window", cv2.WND_PROP_FULLSCREEN)
-cv2.setWindowProperty("window",cv2.WND_PROP_FULLSCREEN,cv2.WINDOW_FULLSCREEN)
+#cv2.namedWindow("window", cv2.WND_PROP_FULLSCREEN)
+#cv2.setWindowProperty("window",cv2.WND_PROP_FULLSCREEN,cv2.WINDOW_FULLSCREEN)
 
 #fourcc = cv2.cv.CV_FOURCC(*'XVID')
 codec = cv2.VideoWriter_fourcc(*'H264')
 out = cv2.VideoWriter('output.avi',codec, 5.0, (1024,768))
 
-dl=glob.glob("/data0/cam*")
+dl=glob.glob("/scratch/data/juha/meteor/cam*/*/*")
 dl.sort()
-print(dl)
+#print(dl)
+#exit(0)
 for d in dl:
     max_im=n.zeros([768,1024,3],dtype=n.uint8)
 
-    fl = glob.glob("%s/21/full*.mp4"%(d))
-    fl.sort()
+    fl=mp4names(d)
+    #    print(fl)
+    
     for f in fl:
-        print(f)
+#        print(f)
         max_im=animate_mp4s(f,max_im,out)
         
 out.release()

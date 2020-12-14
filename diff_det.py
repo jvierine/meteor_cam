@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 import glob
 import sys
 import imageio
-from skimage.measure import compare_ssim
+
 from skimage.measure import block_reduce
 import os
 import re
@@ -55,7 +55,7 @@ def img_var_est(fname="full_59.mp4",
     return(stdest)
 
 def diff_img_stack(fname="full_59.mp4",
-                   odir="/data0/frames",
+                   odir="/scratch/data/juha/meteor",
                    cam_0=1490,
                    cam_1=1536,
                    max_skip=2,        # maximum frame number difference
@@ -118,7 +118,7 @@ def diff_img_stack(fname="full_59.mp4",
                     fr2=n.copy(frame_r)
                     fs=n.sort(fr2.flatten())
                     max_img_val=fs[int(0.95*len(fs))]
-                    scale=n.min([255.0/max_img_val,8.0])
+                    scale=n.min([255.0/max_img_val,4.0])
                 frame_r=frame_r*scale
                 frame_r[frame_r > 255.0]=255.0
                 frame_r=n.array(frame_r,dtype=n.uint8)
@@ -160,13 +160,14 @@ def diff_img_stack(fname="full_59.mp4",
 
 if __name__ == "__main__":
 #    fl=glob.glob("examples/*.mp4")    
-    fl=glob.glob("/data0/kaira/cam*/20201213/00/*.mp4")
+    fl=glob.glob("/var/www/kaira/juha/meteor/cam*/20201213/*/*.mp4")
     fl.sort()
 
     for fi in range(comm.rank,len(fl),comm.size):
         f=fl[fi]
         print(f)
-        diff_img_stack(fname=f)        
+        diff_img_stack(fname=f,
+                       odir="/scratch/data/juha/meteor")
 #        det_frames,det_pos=diff_img_stack(fname=f)
 
         
