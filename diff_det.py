@@ -7,6 +7,7 @@ import imageio
 from skimage.measure import compare_ssim
 from skimage.measure import block_reduce
 import os
+import re
 
 #from skimage.measure import compare_ssim as ssim
 from mpi4py import MPI
@@ -24,8 +25,7 @@ def img_var_est(fname="full_59.mp4",
     ret,frame0 = cap.read()
     frame0[cam_0:cam_1,:,:]=0
     prev=n.array(block_reduce(cv2.cvtColor(frame0,cv2.COLOR_BGR2GRAY),block_size=(dec,dec),func=n.max),dtype=n.float32)
-#    plt.imshow(prev)
- #   plt.show()
+
     w=prev.shape[0]
     h=prev.shape[1]
     stdest=n.zeros([w,h],dtype=n.float32)
@@ -55,6 +55,7 @@ def img_var_est(fname="full_59.mp4",
     return(stdest)
 
 def diff_img_stack(fname="full_59.mp4",
+                   odir="/data0/frames",
                    cam_0=1490,
                    cam_1=1536,
                    max_skip=2,        # maximum frame number difference
@@ -66,6 +67,7 @@ def diff_img_stack(fname="full_59.mp4",
                    debug_print=False,
                    n_frames=15):
     
+    os.system("mkdir -p %s"%(odir))
     stdest=img_var_est(fname=fname,
                        cam_0=cam_0,
                        cam_1=cam_1,
@@ -97,6 +99,7 @@ def diff_img_stack(fname="full_59.mp4",
     while(1):
         ret,frame0 = cap.read()
         if ret:
+            frame_orig=n.copy(frame0)
             frame0[cam_0:cam_1,:,:]=0
             gray = cv2.cvtColor(frame0,cv2.COLOR_BGR2GRAY)
             gray2=n.array(block_reduce(gray,block_size=(dec,dec),func=n.max),dtype=n.float32)
@@ -109,7 +112,7 @@ def diff_img_stack(fname="full_59.mp4",
 
             # difference image maximum at least 3 stdev
             if max_diff > 8.0:
-                frame_r=block_reduce(n.array(frame0,dtype=n.float32),block_size=(dec,dec,1),func=n.mean)
+                frame_r=block_reduce(n.array(frame_orig,dtype=n.float32),block_size=(2,2,1),func=n.mean)
 
                 if scale == None:
                     fr2=n.copy(frame_r)
@@ -119,8 +122,14 @@ def diff_img_stack(fname="full_59.mp4",
                 frame_r=frame_r*scale
                 frame_r[frame_r > 255.0]=255.0
                 frame_r=n.array(frame_r,dtype=n.uint8)
+
                 
-                ofname="%s-%04d.jpg"%(fname,frame_num)
+                p=re.search(".*/(cam.)/(........)/(..)/(full_...mp4)",fname)
+                cam_str=p.group(1)
+                yr_str=p.group(2)
+                hr_str=p.group(3)
+                fn_str=p.group(4)
+                ofname="%s/%s-%s-%s-%s-%04d.jpg"%(odir,cam_str,yr_str,hr_str,fn_str,frame_num)
                 print("saving %s"%(ofname))
                 cv2.imwrite(ofname, frame_r)
 
@@ -148,7 +157,7 @@ def diff_img_stack(fname="full_59.mp4",
 
 if __name__ == "__main__":
 #    fl=glob.glob("examples/*.mp4")    
-    fl=glob.glob("/data0/cam1/21/*.mp4")
+    fl=glob.glob("/data0/kaira/cam*/20201213/00/*.mp4")
     fl.sort()
 
     for fi in range(comm.rank,len(fl),comm.size):
