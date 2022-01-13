@@ -14,6 +14,32 @@ from mpi4py import MPI
 comm = MPI.COMM_WORLD    
 
 
+def img_mean(fname="full_59.mp4",
+             plot=True):
+
+    cap = cv2.VideoCapture(fname)
+    ret,frame0 = cap.read()
+    avg=n.array(cv2.cvtColor(frame0,cv2.COLOR_BGR2GRAY),dtype=n.float32)
+    w=prev.shape[0]
+    h=prev.shape[1]
+    n_avg=0.0
+    idx=0
+    while(1):
+        ret,frame0 = cap.read()
+        if not ret:
+            break
+
+        gray = n.array(cv2.cvtColor(frame0,cv2.COLOR_BGR2GRAY),dtype=n.float32)
+        avg+=gray
+    cap.release()
+    avg=avg/n_avg
+    if plot:
+        plt.imshow(avg,vmin=0,vmax=256)
+        plt.colorbar()
+        plt.show()
+    return(avg)
+
+
 def img_var_est(fname="full_59.mp4",
                 cam_0=1490,
                 cam_1=1536,
