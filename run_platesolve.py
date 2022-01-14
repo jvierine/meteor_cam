@@ -12,7 +12,7 @@ rank = comm.Get_rank()
 
 if __name__ == "__main__":
 
-    fl=glob.glob("tests/*.mp4")
+    fl=glob.glob("%s/*.mp4"%(au.conf["cal_video_dir"]))
     fl.sort()
     obs=au.get_obs_loc()
     

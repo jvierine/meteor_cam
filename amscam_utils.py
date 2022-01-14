@@ -17,6 +17,12 @@ from astropy.coordinates import SkyCoord
 
 import solve_video as sv
 
+conf = {
+    "cal_video_dir":"./tests/",
+    "image_width":1920,
+    "image_height":1080,
+    }
+
 
 #def detection_azel(imfile="tests/2022_01_09_22_08_02_000_011331.mp4.png",
 #                   fname="tests/2022_01_09_22_08_02_000_011331.mp4.corr",
@@ -27,6 +33,25 @@ import solve_video as sv
 def get_obs_loc():
     return(EarthLocation(lon=19.22454409315662,height=77.3,lat=69.5861167101982))
 
+def get_solved_videos(cam_id):
+    fl=glob.glob("%s/*_%s.azel.h5"%(conf["cal_video_dir"],cam_id))
+    fl.sort()
+    return(fl)
+
+def get_cameras():
+    """
+    Look in calibration folder and determine what cameras exist based on file names
+    """
+    fl=glob.glob("%s/2*.mp4"%(conf["cal_video_dir"]))
+    fl.sort()
+    cam_ids=[]
+    for f in fl:
+        cam_id=file_name_to_cam_id(f)
+        if cam_id not in cam_ids:
+            cam_ids.append(cam_id)
+    cam_ids.sort()
+    return(cam_ids)
+            
 def file_name_to_datetime(fname,dt=60.0):
     """
     Read date from file name. assume integrated over dt seconds starting at file print time
@@ -52,27 +77,6 @@ def file_name_to_cam_id(fname):
     cam_id=res.group(8)    
     return(cam_id)
 
-
-
 if __name__ == "__main__":
-    from mpi4py import MPI
-
-    comm = MPI.COMM_WORLD
-    size = comm.Get_size()
-    rank = comm.Get_rank()
-
-    fl=glob.glob("tests/*.mp4")
-    fl.sort()
-    obs=get_obs_loc()
-    
-    for fi in range(rank,len(fl),size):
-        f=fl[fi]
-        print("rank %d file %s"%(rank,f))
-        t0 = file_name_to_datetime(f)
-        cam_id = file_name_to_cam_id(f)
-        
-        fname=sv.img_mean(fname=f,
-                          t0=t0,
-                          obs=obs,
-                          plot=True)
-        
+    cam_ids=get_cameras()
+    print(cam_ids)

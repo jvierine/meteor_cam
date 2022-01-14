@@ -35,18 +35,18 @@ def img_mean(fname="full_59.mp4",
     cap = cv2.VideoCapture(fname)
     ret,frame0 = cap.read()
     avg=n.array(cv2.cvtColor(frame0, cv2.COLOR_BGR2GRAY),dtype=n.float32)
-    w=avg.shape[0]
-    h=avg.shape[1]
+    h=avg.shape[0]
+    w=avg.shape[1]
 
     need_to_resize=False
     new_dim=(1920,1080)
-    if h != 1920:
+    if w != 1920:
         print("resizing SD to HD size")
         need_to_resize=True
         
         avg = cv2.resize(avg, new_dim)        
-        w=1080
-        h=1920
+        h=1080
+        w=1920
     
     n_avg=1.0
     idx=0
@@ -110,6 +110,8 @@ def img_mean(fname="full_59.mp4",
     out_fname="%s.azel.h5"%(prefix)                
     ho=h5py.File("%s.azel.h5"%(prefix),"w")
     ho["weigth"]=all_wgts
+    ho["width_pix"]=w
+    ho["height_pix"]=h    
     ho["flux"]=all_flxs    
     ho["x_pix"]=all_xs
     ho["y_pix"]=all_ys
