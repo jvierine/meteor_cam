@@ -4,7 +4,7 @@ import numpy as n
 import matplotlib.pyplot as plt
 import imageio as iio
 
-def pixel_units_to_normlized(x,y,w=1920,h=1080):
+def pixel_units_to_normalized(x,y,w=1920,h=1080):
     """
     go from pixel coordinates in the range 0..(w-1) on the horizontal axis to
     normalized pixel coordinates in range [-1,1] on the horizontal axis 
@@ -16,7 +16,7 @@ def pixel_units_to_normlized(x,y,w=1920,h=1080):
     yn=(y-mean_y)/mean_x
     return(xn,yn)
 
-def normlized_to_pixel(x,y,w=1920,h=1080):
+def normalized_to_pixel(x,y,w=1920,h=1080):
     """
     go from  normalized pixel coordinates in range [-1,1] on the horizontal axis 
     to pixel coordinates in the range 0..(w-1) on the horizontal axis
@@ -115,8 +115,8 @@ def img_spherical_to_gnomic(I, out_fname="tmp.png",f_g=1.1, f_s=1.6,plot=False):
 if __name__ == "__main__":
 
 
-    xn,yn=pixel_units_to_normlized(10,10,w=1920,h=1080)
-    xp,yp=normlized_to_pixel(xn,yn,w=1920,h=1080)
+    xn,yn=pixel_units_to_normalized(10,10,w=1920,h=1080)
+    xp,yp=normalized_to_pixel(xn,yn,w=1920,h=1080)
 
     
     xg,yg=stereographic_to_gnomic(n.linspace(0,1,num=10),n.linspace(0,1,num=10))

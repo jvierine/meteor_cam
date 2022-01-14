@@ -50,6 +50,7 @@ def detection_azel(imfile="tests/2022_01_09_22_08_02_000_011331.mp4.png",
 
     azs=[]
     els=[]
+
     xs=[]
     ys=[]
     wgts=[]

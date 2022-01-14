@@ -14,8 +14,6 @@ import bright_stars as bsc
 # Import libraries
 from mpl_toolkits import mplot3d
 
-
-
 from astropy import units as u
 from astropy.coordinates import Angle
 from astropy.coordinates import AltAz
@@ -49,6 +47,14 @@ def forward_polymodel(x,y,par):
     return(model)
 
 
+def forward_polymodel3(x,y,par):
+    """
+    Simple third order polynomial 
+    """
+    model = par[0] + par[1]*x + par[2]*y + par[3]*x**2.0 + par[4]*y**2.0 + par[5]*x*y + par[6]*x**3.0 + par[7]*y**3.0 + par[8]*(x**2.0)*y + par[9]*x*(y**2.0)
+    return(model)
+
+
 def first_guess(x,y,az,el,plot_resid=False):
     """
     Guess optical axis and orientation 
@@ -69,6 +75,7 @@ def first_guess(x,y,az,el,plot_resid=False):
     A[:,3]=x**2.0
     A[:,4]=y**2.0
     A[:,5]=x*y
+    
     xhat_n,A_n,m_n=lstsq_it(A,neu_n)
     xhat_e,A_e,m_e=lstsq_it(A,neu_e)
     xhat_u,A_u,m_u=lstsq_it(A,neu_u)
@@ -81,24 +88,104 @@ def first_guess(x,y,az,el,plot_resid=False):
     
     return(xhat_n,xhat_e,xhat_u)
 
+def first_guess3(x,y,az,el,plot_resid=False):
+    """
+    Guess optical axis and orientation 
+    """
+    neu_n=n.cos(n.pi*el/180)*n.cos(n.pi*az/180)
+    neu_e=n.cos(n.pi*el/180)*n.sin(n.pi*az/180)
+    neu_u=n.sin(n.pi*el/180)
+    
+    #
+    # no = a0 + a1*x + a2*x**2.0 + a3*y**2.0 + a4*x*y
+    # ea = a0 + a1*x + a2*x**2.0 + a3*y**2.0 + a4*x*y
+    # up = a0 + a1*x + a3*y + a2*x**2.0  + a4*y**2.0 + a5*x*y
+    n_m = len(x)
+    A = n.zeros([n_m,10])
+    A[:,0]=1.0
+    A[:,1]=x
+    A[:,2]=y    
+    A[:,3]=x**2.0
+    A[:,4]=y**2.0
+    A[:,5]=x*y
+    A[:,6]=x**3.0
+    A[:,7]=y**3.0
+    A[:,8]=(x**2.0)*y
+    A[:,9]=x*y**2.0    
+    
+    xhat_n,A_n,m_n=lstsq_it(A,neu_n)
+    xhat_e,A_e,m_e=lstsq_it(A,neu_e)
+    xhat_u,A_u,m_u=lstsq_it(A,neu_u)
+
+    if plot_resid:
+        fig = plt.figure()
+
+        plt.plot(n.dot(A_n,xhat_n)-m_n, ".")
+        plt.plot(n.dot(A_e,xhat_e)-m_e, ".")
+        plt.plot(n.dot(A_u,xhat_u)-m_u, ".")
+        plt.show()
+    
+    return(xhat_n,xhat_e,xhat_u)
+
+
 class polycal:
-    def __init__(self,x,y,az,el,image_width=1920,image_height=1080):
+    def __init__(self,fname=None,x=[],y=[],az=[],el=[],cam_id="default",image_width=1920,image_height=1080):
         """
-        given a point cloud of image pixel positions normalized (x,y) and corresponding az,el pointings,
+        Given a point cloud of image pixel positions normalized (x,y) and corresponding az,el pointings,
         gind a pointing direction model
         """
         self.image_width=image_width
         self.image_height=image_height
+        self.cam_id=cam_id
 
+        print("init")
+        print(fname)
+
+        if fname != None:
+            h=h5py.File(fname,"r")
+            x=n.copy(h["x"][()])
+            y=n.copy(h["y"][()])
+            az=n.copy(h["az"][()])
+            el=n.copy(h["el"][()])
+            self.image_width=n.copy(h["image_width"][()])
+            self.image_height=n.copy(h["image_height"][()])
+            self.cam_id = n.copy(h["cam_id"][()])
+            h.close()
+            self.fit_pointcloud(x,y,az,el)
+        elif len(x) == len(y) == len(az) == len(el) and len(x) > 0:            
+            self.fit_pointcloud(x,y,az,el)
+        else:
+            raise Exception("pass file name with point cloud or pass (x,y,az,el) that are same length should be same length")
+            
+    def save(self,fname="default"):
+        ho=h5py.File(fname,"w")
+        ho["x"]=self.x
+        ho["y"]=self.y
+        ho["az"]=self.az
+        ho["el"]=self.el
+        ho["cam_id"]=self.cam_id
+        ho["image_width"]=self.image_width
+        ho["image_height"]=self.image_height        
+        ho.close()
+
+    def fit_pointcloud(self, x, y, az, el):
+        self.x=x
+        self.y=y
+        self.az=az
+        self.el=el
         # fit
-        xn,yn=lm.pixel_units_to_normalized(x,y,w=image_width,h=image_height)
+        xn,yn=lm.pixel_units_to_normalized(x,y,w=self.image_width,h=self.image_height)
         
         neu_n=n.cos(n.pi*el/180)*n.cos(n.pi*az/180)
         neu_e=n.cos(n.pi*el/180)*n.sin(n.pi*az/180)
         neu_u=n.sin(n.pi*el/180)
 
         # lstsq polynomial values for north, east, and up directions
-        npar,epar,upar=first_guess(xn,yn,az,el)
+        npar,epar,upar=first_guess3(xn,yn,az,el)
+
+#        print(npar)
+ #       print(epar)
+  #      print(upar)
 
         self.az=az
         self.el=el
@@ -108,14 +195,14 @@ class polycal:
         self.upar=upar
 
         # grid search calculations
-        pix_x=n.arange(image_width)
-        pix_y=n.arange(image_height)
+        pix_x=n.arange(self.image_width)
+        pix_y=n.arange(self.image_height)
         self.pix_xx,self.pix_yy=n.meshgrid(pix_x,pix_y)
 
         self.grid_dim=self.pix_xx.shape
         
         self.norm_x,self.norm_y=lm.pixel_units_to_normalized(self.pix_xx,
-                                                             self.pix_yy,w=image_width,h=image_height)
+                                                             self.pix_yy,w=self.image_width,h=self.image_height)
 #        plt.pcolormesh(self.norm_x)
  #       plt.colorbar()
   #      plt.show()
@@ -132,14 +219,14 @@ class polycal:
         elev = n.arctan2(self.axis[2], r)
         az = n.arctan2(self.axis[1], self.axis[0]) 
        
-        self.el = 180.0*elev/n.pi
-        self.az = 180.0*az/n.pi
-
+        self.on_axis_el = 180.0*elev/n.pi
+        self.on_axis_az = 180.0*az/n.pi
+        
         
     def get_neu(self,x,y):
-        n_m=forward_polymodel(x,y,self.npar)
-        e_m=forward_polymodel(x,y,self.epar)
-        u_m=forward_polymodel(x,y,self.upar)
+        n_m=forward_polymodel3(x,y,self.npar)
+        e_m=forward_polymodel3(x,y,self.epar)
+        u_m=forward_polymodel3(x,y,self.upar)
         return(n_m,e_m,u_m)
 
     def azel_to_xy(self,az,el):
@@ -151,10 +238,17 @@ class polycal:
         point_u=n.sin(n.pi*el/180.0)
 
         res = (self.grid_n - point_n)**2.0 + (self.grid_e - point_e)**2.0 + (self.grid_u - point_u)**2.0
-        print(n.min(res))
-        idx_x=self.pix_xx[n.unravel_index(n.argmin(res),self.grid_dim)]
-        idx_y=self.pix_yy[n.unravel_index(n.argmin(res),self.grid_dim)]
-        return(idx_x,idx_y)
+
+        ami=n.argmin(res)
+        bidx=n.unravel_index(ami,self.grid_dim)
+
+        if res[bidx] < 1e-3:
+#            print(res[bidx])
+            idx_x=self.pix_xx[bidx]
+            idx_y=self.pix_yy[bidx]
+            return(idx_x,idx_y)
+        else:
+            return(None,None)
 
 def get_polycal(cam_id="011331"):
     """
@@ -178,7 +272,8 @@ def get_polycal(cam_id="011331"):
         el=n.concatenate((el,h["el_deg"][()][gidx]))
         h.close()
 
-    pc=polycal(x,y,az,el,image_width=au.conf["image_width"],image_height=au.conf["image_height"])
+    pc=polycal(x=x,y=y,az=az,el=el,image_width=au.conf["image_width"],image_height=au.conf["image_height"],cam_id=cam_id)
+    pc.save(fname="calibrations/%s.h5"%(cam_id))
     return(pc)
     
 
@@ -198,6 +293,8 @@ def plot_sky_sphere():
     
     for cam in cam_ids:
         pc=get_polycal(cam)
+        print("on-axis az %1.3f el %1.3f"%(pc.on_axis_az, pc.on_axis_el))
+        print(pc.azel_to_xy(pc.on_axis_az,pc.on_axis_el))
         
         model_n, model_e, model_u = pc.get_neu(xgg,ygg)
 
@@ -214,7 +311,7 @@ def plot_sky_sphere():
     plt.legend(title="camera id")
     
     plt.show()
-        
+    plt.close()
         
 
     
@@ -225,10 +322,7 @@ if __name__ == "__main__":
     cam_ids=au.get_cameras()
     
     for cam in cam_ids:
-        
-        pc=get_polycal(cam)
-        print("on-axis az %1.3f el %1.3f"%(pc.az, pc.el))
-        print(pc.azel_to_xy(pc.az,pc.el))
+        pc=polycal(fname="calibrations/%s.h5"%(cam))
 
         fl = glob.glob("tests/*%s.mp4.orig.png"%(cam))
         for f in fl:
@@ -237,8 +331,7 @@ if __name__ == "__main__":
             obs = au.get_obs_loc()
 
             aa_frame = AltAz(obstime=t0, location=obs)
-            
-            
+                        
             I=imageio.imread(f)
             plt.imshow(I,vmax=128)
             plt.title(t0)
