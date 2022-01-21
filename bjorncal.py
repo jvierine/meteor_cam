@@ -138,15 +138,24 @@ class bjorncal:
 
 
     def get_par(self):
+#        self.par=n.array([self.f_x,
+ #                         self.f_y,
+  #                        self.x_shift,
+   #                       self.y_shift,
+    #                      self.alpha_x,
+     #                     self.alpha_y,
+      #                    self.angles[0],
+       #                   self.angles[1],
+        #                  self.angles[2]])
         self.par=n.array([self.f_x,
                           self.f_y,
                           self.x_shift,
-                          self.y_shift,
-                          self.alpha_x,
-                          self.alpha_y,
-                          self.angles[0],
-                          self.angles[1],
-                          self.angles[2]])
+                          self.y_shift])
+  #                        self.alpha_x,
+   #                       self.alpha_y,
+    #                      self.angles[0],
+     #                     self.angles[1],
+      #                    self.angles[2]])
         return(self.par)
     
     def set_par(self, par):
@@ -154,12 +163,12 @@ class bjorncal:
         self.f_y=par[1]
         self.x_shift=par[2]
         self.y_shift=par[3]
-        self.alpha_x=par[4]
-        self.alpha_y=par[5]
-        self.angles[0]=par[6]
-        self.angles[1]=par[7]
-        self.angles[2]=par[8]
-        self.rotate_basis(self.angles)
+  #      self.alpha_x=par[4]
+   #     self.alpha_y=par[5]
+    #    self.angles[0]=par[6]
+#        self.angles[1]=par[7]
+ #       self.angles[2]=par[8]
+  #      self.rotate_basis(self.angles)
         self.par=par
         
 
@@ -219,7 +228,7 @@ class bjorncal:
 
     def ss(self,plot=False):
 
-        cal_n,cal_e, cal_u = self.get_neu(self.star_x, self.star_y)
+        cal_n,cal_e,cal_u = self.get_neu(self.star_x, self.star_y)
 
 #        errsum = n.sum((n.abs(cal_n - self.star_n) + n.abs(cal_e - self.star_e) + n.abs(cal_u - self.star_u)))
         errsum = n.sum(n.abs(cal_n - self.star_n) + n.abs(cal_e - self.star_e) + n.abs(cal_u - self.star_u))
@@ -345,7 +354,6 @@ def find_yale_matches(station_id="AMS133"):
             plt.xlim([0,I.shape[1]])
             plt.ylim([I.shape[0],0])            
             plt.title(t0)
-            
 
             plt.scatter(x,y,s=100,facecolors='none',edgecolors='yellow')
             plt.tight_layout()

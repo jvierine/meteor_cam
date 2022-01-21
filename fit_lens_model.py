@@ -21,289 +21,120 @@ from astropy.coordinates import EarthLocation
 from astropy.time import Time
 from astropy.time import TimeDelta
 from astropy.coordinates import SkyCoord
+import os
+
+import cv2
 
 
-def lstsq_it(A,m):
-    """
-    iterative least-squares fit to remove outliers
-    """
-    for i in range(3):
-        xhat=n.linalg.lstsq(A,m,rcond=None)[0]
-        resid=n.abs(n.dot(A,xhat)-m)
-        std_est=n.median(resid)
-        gidx=n.where(resid < 4.0*std_est)[0]
-
-        A = n.copy(A[gidx,:])
-        m = n.copy(m[gidx])
-
-    xhat=n.linalg.lstsq(A,m,rcond=None)[0]
-    return(xhat,A,m)
-
-def forward_polymodel(x,y,par):
-    """
-    Simple second order polynomial 
-    """
-    model = par[0] + par[1]*x + par[2]*y + par[3]*x**2.0 + par[4]*y**2.0 + par[5]*x*y
-    return(model)
+import polycal as pcal
 
 
-def forward_polymodel3(x,y,par):
-    """
-    Simple third order polynomial 
-    """
-    model = par[0] + par[1]*x + par[2]*y + par[3]*x**2.0 + par[4]*y**2.0 + par[5]*x*y + par[6]*x**3.0 + par[7]*y**3.0 + par[8]*(x**2.0)*y + par[9]*x*(y**2.0)
-    return(model)
 
+def plot_fisheye_bounds(image_width=1080):
 
-def first_guess(x,y,az,el,plot_resid=False):
-    """
-    Guess optical axis and orientation 
-    """
-    neu_n=n.cos(n.pi*el/180)*n.cos(n.pi*az/180)
-    neu_e=n.cos(n.pi*el/180)*n.sin(n.pi*az/180)
-    neu_u=n.sin(n.pi*el/180)
+    image = n.zeros([1080,1920,3],dtype=n.float32)
+
+    colors = [ [1.0,0,0],[0,1,0], [0,0,1] ] 
     
-    #
-    # no = a0 + a1*x + a2*x**2.0 + a3*y**2.0 + a4*x*y
-    # ea = a0 + a1*x + a2*x**2.0 + a3*y**2.0 + a4*x*y
-    # up = a0 + a1*x + a3*y + a2*x**2.0  + a4*y**2.0 + a5*x*y
-    n_m = len(x)
-    A = n.zeros([n_m,6])
-    A[:,0]=1.0
-    A[:,1]=x
-    A[:,2]=y    
-    A[:,3]=x**2.0
-    A[:,4]=y**2.0
-    A[:,5]=x*y
+    focal_l = 1.5*(image_width/2.0)/n.pi
+
+    xg=n.arange(au.conf["image_width"]) - au.conf["image_width"]/2.0 + 0.5
+    yg=n.arange(au.conf["image_height"]) - au.conf["image_height"]/2.0 + 0.5
+    xgg,ygg=n.meshgrid(xg,yg)
     
-    xhat_n,A_n,m_n=lstsq_it(A,neu_n)
-    xhat_e,A_e,m_e=lstsq_it(A,neu_e)
-    xhat_u,A_u,m_u=lstsq_it(A,neu_u)
+    data = {}
 
-    if plot_resid:
-        plt.plot(n.dot(A_n,xhat_n)-m_n,".")
-        plt.plot(n.dot(A_e,xhat_e)-m_e,".")
-        plt.plot(n.dot(A_u,xhat_u)-m_u,".")
-        plt.show()
-    
-    return(xhat_n,xhat_e,xhat_u)
+#    out = cv2.VideoWriter('outpy.avi',cv2.VideoWriter_fourcc('M','J','P','G'), 10, (image_width,image_width))
 
-def first_guess3(x,y,az,el,plot_resid=False):
-    """
-    Guess optical axis and orientation 
-    """
-    neu_n=n.cos(n.pi*el/180)*n.cos(n.pi*az/180)
-    neu_e=n.cos(n.pi*el/180)*n.sin(n.pi*az/180)
-    neu_u=n.sin(n.pi*el/180)
-    
-    #
-    # no = a0 + a1*x + a2*x**2.0 + a3*y**2.0 + a4*x*y
-    # ea = a0 + a1*x + a2*x**2.0 + a3*y**2.0 + a4*x*y
-    # up = a0 + a1*x + a3*y + a2*x**2.0  + a4*y**2.0 + a5*x*y
-    n_m = len(x)
-    A = n.zeros([n_m,10])
-    A[:,0]=1.0
-    A[:,1]=x
-    A[:,2]=y    
-    A[:,3]=x**2.0
-    A[:,4]=y**2.0
-    A[:,5]=x*y
-    A[:,6]=x**3.0
-    A[:,7]=y**3.0
-    A[:,8]=(x**2.0)*y
-    A[:,9]=x*y**2.0    
-    
-    xhat_n,A_n,m_n=lstsq_it(A,neu_n)
-    xhat_e,A_e,m_e=lstsq_it(A,neu_e)
-    xhat_u,A_u,m_u=lstsq_it(A,neu_u)
+    cam_ids=["011331","011332","011333","011334","011335","011336","011337"]
 
-    if plot_resid:
-        fig = plt.figure()
+    n_cams = len(cam_ids)
 
-        plt.plot(n.dot(A_n,xhat_n)-m_n, ".")
-        plt.plot(n.dot(A_e,xhat_e)-m_e, ".")
-        plt.plot(n.dot(A_u,xhat_u)-m_u, ".")
-        plt.show()
-    
-    return(xhat_n,xhat_e,xhat_u)
+    I = n.zeros([image_width,image_width,3],dtype=n.float32)
 
-
-class polycal:
-    def __init__(self,fname=None,x=[],y=[],az=[],el=[],cam_id="default",image_width=1920,image_height=1080):
-        """
-        Given a point cloud of image pixel positions normalized (x,y) and corresponding az,el pointings,
-        gind a pointing direction model
-        """
-        self.image_width=image_width
-        self.image_height=image_height
-        self.cam_id=cam_id
-
-        print("init")
-        print(fname)
-
-        if fname != None:
-            h=h5py.File(fname,"r")
-            x=n.copy(h["x"][()])
-            y=n.copy(h["y"][()])
-            az=n.copy(h["az"][()])
-            el=n.copy(h["el"][()])
-            self.image_width=n.copy(h["image_width"][()])
-            self.image_height=n.copy(h["image_height"][()])
-            self.cam_id = n.copy(h["cam_id"][()])
-            h.close()
-            self.fit_pointcloud(x,y,az,el)
-        elif len(x) == len(y) == len(az) == len(el) and len(x) > 0:            
-            self.fit_pointcloud(x,y,az,el)
-        else:
-            raise Exception("pass file name with point cloud or pass (x,y,az,el) that are same length should be same length")
-            
-    def save(self,fname="default"):
-        ho=h5py.File(fname,"w")
-        ho["x"]=self.x
-        ho["y"]=self.y
-        ho["az"]=self.az
-        ho["el"]=self.el
-        ho["cam_id"]=self.cam_id
-        ho["image_width"]=self.image_width
-        ho["image_height"]=self.image_height        
-        ho.close()
-
-    def fit_pointcloud(self, x, y, az, el):
-        self.x=x
-        self.y=y
-        self.az=az
-        self.el=el
-        # fit
-        xn,yn=lm.pixel_units_to_normalized(x,y,w=self.image_width,h=self.image_height)
+    for cam_id in cam_ids:
+        pc=pcal.get_polycal(cam_id=cam_id)
         
-        neu_n=n.cos(n.pi*el/180)*n.cos(n.pi*az/180)
-        neu_e=n.cos(n.pi*el/180)*n.sin(n.pi*az/180)
-        neu_u=n.sin(n.pi*el/180)
+        # positions per pixel
+        p_n, p_e, p_u = pc.get_neu(xgg,ygg)
 
-        # lstsq polynomial values for north, east, and up directions
-        npar,epar,upar=first_guess3(xn,yn,az,el)
-
-#        print(npar)
- #       print(epar)
-  #      print(upar)
-
-        self.az=az
-        self.el=el
-        
-        self.npar=npar
-        self.epar=epar
-        self.upar=upar
-
-        # grid search calculations
-        pix_x=n.arange(self.image_width)
-        pix_y=n.arange(self.image_height)
-        self.pix_xx,self.pix_yy=n.meshgrid(pix_x,pix_y)
-
-        self.grid_dim=self.pix_xx.shape
-        
-        self.norm_x,self.norm_y=lm.pixel_units_to_normalized(self.pix_xx,
-                                                             self.pix_yy,w=self.image_width,h=self.image_height)
-#        plt.pcolormesh(self.norm_x)
- #       plt.colorbar()
-  #      plt.show()
-        self.grid_n,self.grid_e,self.grid_u=self.get_neu(self.norm_x,self.norm_y)
-
-        # on-axis neu
-        ax_n, ax_e, ax_u=self.get_neu(0,0)
-        self.axis = n.array([ax_n,ax_e,ax_u])
         # normalize
-        self.axis=self.axis/n.linalg.norm(self.axis)
+        norm=n.sqrt(p_n**2.0 + p_e**2.0 + p_u**2.0)
+        p_n=p_n/norm
+        p_e=p_e/norm
+        p_u=p_u/norm        
+
+        theta = n.arccos(p_u)
+        az = n.arctan2(p_e, p_n)
+
+        R = focal_l*theta
+        xp = n.array(n.round(R*n.cos(az) + image_width/2.0),dtype=n.int)
+        yp = n.array(n.round(R*n.sin(az) + image_width/2.0),dtype=n.int)
+
+        cam_data={"cal": pc, "xp":xp, "yp":yp}
         
-        # on-axis az,el
-        r = n.hypot(self.axis[1], self.axis[0])
-        elev = n.arctan2(self.axis[2], r)
-        az = n.arctan2(self.axis[1], self.axis[0]) 
-       
-        self.on_axis_el = 180.0*elev/n.pi
-        self.on_axis_az = 180.0*az/n.pi
+        data[cam_id]=cam_data
         
+    cams=data.keys()
+    new_dim=(1920,1080)
+
+    for ci in range(len(cam_ids)):
+        cam_id=cam_ids[ci]
+        print(cam_id)
+        xp=data[cam_id]["xp"]
+        yp=data[cam_id]["yp"]
+
+        for col in range(3):
+#            image[0:10,:,col]=colors[ci%len(colors)][col]
+ #           image[:,0:10,col]=colors[ci%len(colors)][col]
+  #          image[(1080-10):1080,:,col]=colors[ci%len(colors)][col]
+   #         image[:,(1920-10):1920,col]=colors[ci%len(colors)][col]
+            image[:,:,col]=colors[ci%len(colors)][col]
+#            image[:,0:10,col]=colors[ci%len(colors)][col]
+ #           image[(1080-10):1080,:,col]=colors[ci%len(colors)][col]
+  #          image[:,(1920-10):1920,col]=colors[ci%len(colors)][col]
+
+        I[xp,yp,:] += image
         
-    def get_neu(self,x,y):
-        n_m=forward_polymodel3(x,y,self.npar)
-        e_m=forward_polymodel3(x,y,self.epar)
-        u_m=forward_polymodel3(x,y,self.upar)
-        return(n_m,e_m,u_m)
+    plt.imshow(I)
+    plt.show()
 
-    def azel_to_xy(self,az,el):
-        """
-        tbd: find better than brute-force solution
-        """
-        point_n=n.cos(n.pi*el/180.0)*n.cos(n.pi*az/180.0)
-        point_e=n.cos(n.pi*el/180.0)*n.sin(n.pi*az/180.0)
-        point_u=n.sin(n.pi*el/180.0)
 
-        res = (self.grid_n - point_n)**2.0 + (self.grid_e - point_e)**2.0 + (self.grid_u - point_u)**2.0
 
-        ami=n.argmin(res)
-        bidx=n.unravel_index(ami,self.grid_dim)
-
-        if res[bidx] < 1e-3:
-#            print(res[bidx])
-            idx_x=self.pix_xx[bidx]
-            idx_y=self.pix_yy[bidx]
-            return(idx_x,idx_y)
-        else:
-            return(None,None)
-
-def get_polycal(cam_id="011331"):
-    """
-    calibrate camera
-    """
-    print("fitting %s"%(cam_id))
-    fl=au.get_solved_videos(cam_id)
-    print("found %d solutions"%(len(fl)))
-
-    x=n.array([])
-    y=n.array([])
-    az=n.array([])
-    el=n.array([])
-        
-    for f in fl:
-        h=h5py.File(f,"r")
-        gidx=n.where(h["weigth"][()] > 0.99)[0]
-        x=n.concatenate((x,h["x_pix"][()][gidx]))
-        y=n.concatenate((y,h["y_pix"][()][gidx]))
-        az=n.concatenate((az,h["az_deg"][()][gidx]))
-        el=n.concatenate((el,h["el_deg"][()][gidx]))
-        h.close()
-
-    pc=polycal(x=x,y=y,az=az,el=el,image_width=au.conf["image_width"],image_height=au.conf["image_height"],cam_id=cam_id)
-    pc.save(fname="calibrations/%s.h5"%(cam_id))
-    return(pc)
-    
-
-def plot_sky_sphere():
+def plot_sky_sphere(station_id="AMS133"):
     """
     show the field of views of the cameras as an approxmate grid
     """
+
+    
     fig = plt.figure()
     ax = plt.axes(projection='3d')
     
-    cam_ids=au.get_cameras()
-    
-    xg=n.linspace(-1,1,num=20)
-    y_max=au.conf["image_height"]/au.conf["image_width"]
-    yg=n.linspace(-y_max,y_max,num=20)
+    cam_ids=au.get_cameras(station_id=station_id)
+
+    xg=n.linspace(-au.conf["image_width"]/2.0,au.conf["image_width"]/2.0,
+                  num=20)
+    yg=n.linspace(-au.conf["image_height"]/2.0,au.conf["image_height"]/2.0,
+                  num=20)
     xgg,ygg=n.meshgrid(xg,yg)
     
     for cam in cam_ids:
-        pc=get_polycal(cam)
-        print("on-axis az %1.3f el %1.3f"%(pc.on_axis_az, pc.on_axis_el))
-        print(pc.azel_to_xy(pc.on_axis_az,pc.on_axis_el))
+        try:
+            pc=pcal.get_polycal(cam)
+            print("on-axis az %1.3f el %1.3f"%(pc.on_axis_az, pc.on_axis_el))
+            print(pc.azel_to_xy(pc.on_axis_az,pc.on_axis_el))
         
-        model_n, model_e, model_u = pc.get_neu(xgg,ygg)
+            model_n, model_e, model_u = pc.get_neu(xgg,ygg)
 
-        m_norm=n.sqrt(model_n**2.0 + model_e**2.0 + model_u**2.0)
-        model_n = model_n/m_norm
-        model_e = model_e/m_norm
-        model_u = model_u/m_norm        
+            m_norm=n.sqrt(model_n**2.0 + model_e**2.0 + model_u**2.0)
+            model_n = model_n/m_norm
+            model_e = model_e/m_norm
+            model_u = model_u/m_norm        
 
-        ax.scatter3D(model_n.flatten(),model_e.flatten(),model_u.flatten(),label=cam)
+            ax.scatter3D(model_n.flatten(),model_e.flatten(),model_u.flatten(),label=cam)
+        except:
+            print("not enough calibration points found yet")
+            pass
     ax.set_xlabel("North")
     ax.set_ylabel("East")
     ax.set_zlabel("Up")        
@@ -314,41 +145,140 @@ def plot_sky_sphere():
     plt.close()
         
 
-    
-if __name__ == "__main__":
 
-    plot_sky_sphere()
+
     
-    cam_ids=au.get_cameras()
+
+    
+
+
+def find_yale_matches(station_id="AMS133"):
+    import star_finder as sfm
+    
+    cam_ids=au.get_cameras(station_id=station_id)
     
     for cam in cam_ids:
-        pc=polycal(fname="calibrations/%s.h5"%(cam))
 
-        fl = glob.glob("tests/*%s.mp4.orig.png"%(cam))
-        for f in fl:
+        pcal_found=False
+        try:
+            pc=pcal.get_polycal(cam_id=cam,model_order=2,astrometry=False)
+            pcal_found=True
+        except:
+            pass
+            
 
-            t0 = au.file_name_to_datetime(f)
-            obs = au.get_obs_loc()
+        if pcal_found:
+            yale_x = []
+            yale_y = []
+            yale_az = []
+            yale_el = []
 
-            aa_frame = AltAz(obstime=t0, location=obs)
-                        
-            I=imageio.imread(f)
-            plt.imshow(I,vmax=128)
-            plt.title(t0)
+            x_resid = []
+            y_resid = []
+            
+#            pc=pcal.polycal(fname=cal_fname,model_order=1)
+            
+            sf=sfm.star_finder(pc=pc)            
 
-        
-            bs=bsc.bright_stars()
-            for i in range(500):
-                d=bs.get_ra_dec_vmag(i)
+            fl = glob.glob("tests/*%s.mp4.orig.png"%(cam))
+            for f in fl:
+                I_orig=imageio.imread(f)
+                I=au.mask(I_orig,cam)
+                t0 = au.file_name_to_datetime(f)
+                obs = au.get_obs_loc(cam)
+                
+                x,y,az,el=sf.find_bright_stars_in_image(t0,obs,N_stars=500)
+                
+                n_stars=len(x)
+                
+                found_xs=[]
+                found_ys=[]
+                true_xs=[]
+                true_ys=[]
+                
+                for si in range(n_stars):
+                    x0=x[si]
+                    y0=y[si]
+                    print(x0)
+                    print(y0)
+                    minx=n.max([0,x0-40])
+                    miny=n.max([0,y0-40])
+                    maxx=n.min([x0+40,pc.image_width])
+                    maxy=n.min([y0+40,pc.image_height])
 
-                c = SkyCoord(ra=d[0]*u.degree, dec=d[1]*u.degree, frame='icrs')
-                altaz=c.transform_to(aa_frame)
-                star_az=float(altaz.az/u.deg)
-                star_el=float(altaz.alt/u.deg)
+#                    plt.imshow(I[miny:maxy,minx:maxx])  
+                    sources=sfm.detect_stars(I[miny:maxy,minx:maxx])
+                    if sources != None:
+                        xc=sources["xcentroid"]
+                        yc=sources["ycentroid"]
 
-                x,y=pc.azel_to_xy(star_az,star_el)
-                plt.scatter(x,y,s=100,facecolors='none',edgecolors='white')
-            plt.show()
+                        truex=x0-minx
+                        truey=y0-miny
 
-        
+                        di=n.argmin( (truex-xc)**2.0 + (truey-yc)**2.0 )
 
+                        if n.abs(truex - xc[di]) < 5.0 and n.abs(truey-yc[di]) < 5.0:
+                            resid = n.sqrt( (truex-xc[di])**2.0 + (truey-yc[di])**2.0)
+                            
+                            x_resid.append(truex-xc[di])
+                            y_resid.append(truey-yc[di])                            
+                            
+                            print("found nearby star resid %1.2f"%(resid))
+                            found_xs.append(x[si])
+                            found_ys.append(y[si])
+                            true_xs.append(xc[di]+minx)
+                            true_ys.append(yc[di]+miny)
+                            
+                            yale_x.append(xc[di]+minx)
+                            yale_y.append(yc[di]+miny)
+                            yale_az.append(az[si])
+                            yale_el.append(el[si]) 
+                            #                               plt.scatter(xc[di],yc[di],s=100,facecolors='none',edgecolors='red')
+                            
+                            #                  plt.axhline(y0-miny,color="red")
+                            #                 plt.axvline(x0-minx,color="red")                    
+                            #                    plt.scatter([x0-minx],[y0-miny],s=100,facecolors='none',edgecolors='red')                        
+                            #                plt.colorbar()
+                            #               plt.show()
+                            
+
+                plt.figure(figsize=(1.5*8,6*1.5))
+                plt.imshow(I_orig,vmax=128)
+                plt.title(t0)
+
+                # plt.scatter(found_xs,found_ys,s=100,facecolors='none',edgecolors='white')
+                # all stars searched
+                plt.scatter(x,y,s=100,facecolors='none',edgecolors='red')
+                # found positions
+                plt.scatter(true_xs,true_ys,s=100,facecolors='none',edgecolors='yellow')                
+                plt.tight_layout()
+                print("saving yale matches %s"%(f))
+#                plt.show()
+                plt.savefig("%s.yale.png"%(f))
+#                plt.clf()
+ #               plt.close()
+#                plt.show()
+            # we now have
+            # more stars that are found using the course cal. let's save them
+            out_cal_fname="calibrations/yale_%s.h5"%(cam)            
+            print("saving yale cal %s resid %1.2f %1.2f"%(out_cal_fname,n.median(n.abs(x_resid)),n.median(n.abs(y_resid))))
+            
+            ho=h5py.File(out_cal_fname,"w")
+            ho["x"]=yale_x
+            ho["y"]=yale_y
+            ho["az"]=yale_az
+            ho["el"]=yale_el            
+            ho["image_width"]=pc.image_width
+            ho["image_height"]=pc.image_height
+            ho["cam_id"]=pc.cam_id
+            ho["x_resid"]=x_resid
+            ho["y_resid"]=y_resid            
+            ho.close()
+
+
+
+if __name__ == "__main__":
+    plot_fisheye_bounds(image_width=1080)
+#    plot_sky_sphere(station_id="AMS133")
+ #   find_yale_matches()
+            

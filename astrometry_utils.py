@@ -59,7 +59,7 @@ def detection_azel(imfile="tests/2022_01_09_22_08_02_000_011331.mp4.png",
     for l in corr:
         print("RA %1.2f DEC %1.2f"%(l["index_ra"],l["index_dec"]))
 
-        if l["match_weight"] > 0.0:
+        if l["match_weight"] > 0.98:
             if plot:
                 plt.scatter(l[0]-1.0,l[1]-1.0,s=100,facecolors='none',edgecolors='white')
             

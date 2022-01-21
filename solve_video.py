@@ -26,11 +26,17 @@ def img_mean(fname="full_59.mp4",
              scale=1.0,
              solve=False,
              n_blocks_x=3,
-             n_blocks_y=4,
+             n_blocks_y=3,
+             clip_x=10,
+             clip_y=100,
+             refit=True,
              blur_width=5,
              plot=False):
 
     prefix=re.search("(.*).(...)",fname).group(1)
+    if os.path.exists("%s.azel.h5"%(prefix)) and not refit:
+        print("already fitted")
+        return
         
     cap = cv2.VideoCapture(fname)
     ret,frame0 = cap.read()
@@ -57,7 +63,7 @@ def img_mean(fname="full_59.mp4",
 
         frame = n.array(cv2.cvtColor(frame0, cv2.COLOR_BGR2GRAY),dtype=n.float32)
         frame = cv2.resize(frame, new_dim)
-        frame = cv2.blur(frame,(blur_width,blur_width))
+#        frame = cv2.blur(frame,(blur_width,blur_width))
 #        print(n_avg)
 #        avg=n.maximum(frame,avg)
         avg+=frame
@@ -75,9 +81,9 @@ def img_mean(fname="full_59.mp4",
 
     imageio.imwrite("%s.orig.png"%(fname), n.array(avg,dtype=n.uint8))
 
-    dx=int(n.floor(avg.shape[0]/n_blocks_x))
+    dx=int(n.floor( (avg.shape[0]-2*clip_x) /n_blocks_x))
     xstep=int(dx/2)
-    dy=int(n.floor(avg.shape[1]/n_blocks_y))
+    dy=int(n.floor( (avg.shape[1]-2*clip_y) /n_blocks_y))
     ystep=int(dy/2)
 
     all_xs=n.array([])
@@ -87,11 +93,22 @@ def img_mean(fname="full_59.mp4",
     all_wgts=n.array([])
     all_flxs=n.array([])            
     
-    for i in range(2*n_blocks_x-1):
-        for j in range(2*n_blocks_y-1):
-            tox=n.min([avg.shape[0],i*xstep+dx])
-            toy=n.min([avg.shape[1],j*ystep+dy])                
-            BI=n.copy(avg[ (i*xstep):tox, (j*ystep):toy ])
+    for i in range(2*n_blocks_x):
+        for j in range(2*n_blocks_y):
+            fromx=(i*xstep) + clip_x
+            fromy=(j*ystep) + clip_y
+            print(fromx)
+            print(fromy)            
+            tox=n.min([avg.shape[0],fromx+dx])
+            toy=n.min([avg.shape[1],fromy+dy])
+            print("from x",fromx," fromy ",fromy," tox ",tox," toy ",toy)
+            BI=n.copy(avg[ fromx:tox, fromy:toy ])
+
+            BI=BI-n.min(BI)
+            BI=255.0*BI/n.max(BI)
+            BI[BI>255.0]=255.0
+            BI[BI<0]=0
+            
             
             block_fname="%s.%d.%d.png"%(fname,i,j)
             print(block_fname)
@@ -100,8 +117,9 @@ def img_mean(fname="full_59.mp4",
             
             if det_file != None:
                 xs,ys,azs,els,wgts,flxs=ah.detection_azel(block_fname,det_file,t0,obs,plot=False)
-                all_xs=n.concatenate((all_xs,xs+j*ystep))
-                all_ys=n.concatenate((all_ys,ys+i*xstep))
+                # x,y were flipped!
+                all_xs=n.concatenate((all_xs,xs+fromy))
+                all_ys=n.concatenate((all_ys,ys+fromx))
                 all_azs=n.concatenate((all_azs,azs))
                 all_els=n.concatenate((all_els,els))
                 all_wgts=n.concatenate((all_wgts,wgts))
@@ -157,15 +175,14 @@ if __name__ == "__main__":
     # SD video
     fname=img_mean(fname="tests/2022_01_10_00_04_00_000_011331.mp4",
                    t0=Time("2022-01-10T00:04:00",format="isot"),
-                   obs=EarthLocation(lon=19.22454409315662,height=77.3,lat=69.5861167101982),
+                   obs=EarthLocation(lon=19.22454409315662,
+                                     height=77.3,lat=69.5861167101982),
                    plot=True)
-    
-    
-    
     
     fname=img_mean(fname="tests/2022_01_09_22_08_02_000_011331.mp4",
                    t0=Time("2022-01-09T22:08:02",format="isot"),
-                   obs=EarthLocation(lon=19.22454409315662,height=77.3,lat=69.5861167101982),
+                   obs=EarthLocation(lon=19.22454409315662,
+                                     height=77.3,lat=69.5861167101982),
                    plot=True)
 
 
